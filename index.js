@@ -10,71 +10,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 5000;
-
-// Safety check
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-  console.error("❌ Razorpay keys missing");
-  process.exit(1);
-}
-
-// Razorpay instance
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("Razorpay backend running");
-});
-
-// Create order
 app.post("/create-order", async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount } = req.body; // Amount in Rupees
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid amount" });
-    }
-
-    const order = await razorpay.orders.create({
-      amount: Math.round(amount * 100), // paise
+    const options = {
+      amount: Math.round(amount * 100), // Convert to Paise and ensure it's an integer
       currency: "INR",
-      receipt: "rcpt_" + Date.now(),
-    });
+      receipt: `receipt_${Date.now()}`,
+    };
 
-    res.json(order);
+    const order = await razorpay.orders.create(options);
+    res.status(200).json(order);
   } catch (err) {
-    console.error("Create order error:", err);
-    res.status(500).json({ error: "Order creation failed" });
+    console.error(err);
+    res.status(500).json({ error: "Cannot create order" });
   }
 });
 
-// Verify payment
 app.post("/verify-payment", (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
-      req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+    req.body;
 
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
+  const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
+  hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+  const expectedSignature = hmac.digest("hex");
 
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false });
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Verify error:", err);
-    res.status(500).json({ success: false });
+  if (expectedSignature === razorpay_signature) {
+    res.status(200).json({ success: true });
+  } else {
+    res.status(400).json({ success: false });
   }
 });
 
-app.listen(PORT, () => {
-  console.log("✅ Razorpay backend running on port", PORT);
-});
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
