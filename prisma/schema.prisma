@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////
+// ENUMS
+//////////////////////
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+//////////////////////
+// AGENTS
+//////////////////////
+
+model Agent {
+  id              String   @id @default(uuid())
+
+  name            String
+  email           String   @unique
+  phone           String
+  aadhaarNumber   String   @unique
+
+  addressFull     String
+  addressCity     String
+  addressState    String
+  addressPincode  String
+
+  occupation      String
+
+  agentCode       String   @unique
+  isActive        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  approvedAt      DateTime?
+
+  // Relations
+  users           User[]
+  payments        Payment[]
+
+  @@map("agents")
+}
+
+//////////////////////
+// USERS
+//////////////////////
+
+model User {
+  id                     String   @id @default(uuid())
+
+  firstName              String
+  middleName             String?
+  lastName               String
+  email                  String
+  phone                  String
+  aadhaar                String
+  dob                    DateTime
+  gender                 String
+  address                String
+
+  preferredSector        Json
+  preferredJobType       String
+  careerGoal             String
+  skills                 String
+  englishProficiency     String
+  expectedSalary         Int
+  preferredLocation      String
+  hasPreviousExperience  Boolean
+
+  resumeUrl              String?
+
+  paymentStatus          PaymentStatus @default(PENDING)
+
+  // Relations
+  agentId                String?
+  agent                  Agent? @relation(fields: [agentId], references: [id])
+
+  payments               Payment[]
+
+  createdAt              DateTime @default(now())
+
+  @@map("users")
+}
+
+//////////////////////
+// PAYMENTS
+//////////////////////
+
+model Payment {
+  id                    String   @id @default(uuid())
+
+  razorpayOrderId       String
+  razorpayPaymentId     String
+  amount                Int
+  gst                   Int
+  status                PaymentStatus
+
+  // Relations
+  userId                String
+  user                  User   @relation(fields: [userId], references: [id])
+
+  agentId               String?
+  agent                 Agent? @relation(fields: [agentId], references: [id])
+
+  createdAt             DateTime @default(now())
+
+  @@map("payments")
+}
+
+//////////////////////
+// ADMINS
+//////////////////////
+
+model Admin {
+  id            String    @id @default(uuid())
+
+  name          String
+  email         String    @unique
+  passwordHash String
+  role          AdminRole @default(ADMIN)
+
+  createdAt    DateTime  @default(now())
+
+  @@map("admins")
+}
