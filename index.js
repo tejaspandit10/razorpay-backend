@@ -46,7 +46,7 @@ app.get("/", (req, res) => {
 });
 
 ////////////////////////////////////////////////////
-// AGENT REGISTRATION
+// AGENT REGISTRATION (AADHAAR REQUIRED)
 ////////////////////////////////////////////////////
 app.post("/api/agents/register", async (req, res) => {
   try {
@@ -62,15 +62,35 @@ app.post("/api/agents/register", async (req, res) => {
       occupation,
     } = req.body;
 
+    // ✅ Required validation
     if (!name || !email || !phone || !aadhaarNumber) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({
+        error: "All fields including Aadhaar are required",
+      });
     }
 
+    // ✅ Aadhaar validation
     if (!/^\d{12}$/.test(aadhaarNumber)) {
-      return res.status(400).json({ error: "Invalid Aadhaar number" });
+      return res.status(400).json({
+        error: "Invalid Aadhaar number (must be 12 digits)",
+      });
     }
 
-    const agentCode = nanoid(8).toUpperCase();
+    // ✅ Prevent duplicate email or Aadhaar
+    const existingAgent = await prisma.agent.findFirst({
+      where: {
+        OR: [
+          { email },
+          { aadhaarNumber }
+        ]
+      }
+    });
+
+    if (existingAgent) {
+      return res.status(400).json({
+        error: "Agent with this Email or Aadhaar already exists",
+      });
+    }
 
     const agent = await prisma.agent.create({
       data: {
@@ -83,18 +103,52 @@ app.post("/api/agents/register", async (req, res) => {
         addressState,
         addressPincode,
         occupation,
-        agentCode,
-        isActive: false,
+        isActive: false,   // Will be activated by admin
+        agentCode: null,   // Generated only after approval
       },
     });
 
     res.json({
-      message: "Agent registered. Awaiting admin approval.",
-      agentCode: agent.agentCode,
+      message: "Agent registered successfully. Awaiting admin approval.",
+      agentId: agent.id,
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Agent registration failed" });
+  }
+});
+
+////////////////////////////////////////////////////
+// ADMIN APPROVE AGENT
+////////////////////////////////////////////////////
+app.post("/api/agents/approve", async (req, res) => {
+  try {
+    const { agentId } = req.body;
+
+    if (!agentId) {
+      return res.status(400).json({ error: "Agent ID required" });
+    }
+
+    const agentCode = nanoid(8).toUpperCase();
+
+    const agent = await prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        isActive: true,
+        agentCode,
+        approvedAt: new Date(),
+      },
+    });
+
+    res.json({
+      message: "Agent approved successfully",
+      agentCode: agent.agentCode,
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Approval failed" });
   }
 });
 
@@ -120,6 +174,7 @@ app.post("/api/agents/validate-code", async (req, res) => {
     }
 
     res.json({ valid: true, agentId: agent.id });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Validation failed" });
@@ -182,6 +237,7 @@ app.post("/api/users/create", async (req, res) => {
       message: "User created successfully",
       userId: user.id,
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "User creation failed" });
@@ -206,6 +262,7 @@ app.post("/create-order", async (req, res) => {
     });
 
     res.json(order);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Order creation failed" });
@@ -259,12 +316,11 @@ app.post("/verify-payment", async (req, res) => {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        paymentStatus: "SUCCESS",
-      },
+      data: { paymentStatus: "SUCCESS" },
     });
 
     res.json({ success: true });
+
   } catch (error) {
     console.error("Verify error:", error);
     res.status(500).json({ success: false });
@@ -275,5 +331,5 @@ app.post("/verify-payment", async (req, res) => {
 // START SERVER
 ////////////////////////////////////////////////////
 app.listen(PORT, () => {
-  console.log( `Backend running on port ${PORT}`);
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
