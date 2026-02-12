@@ -275,5 +275,5 @@ app.post("/verify-payment", async (req, res) => {
 // START SERVER
 ////////////////////////////////////////////////////
 app.listen(PORT, () => {
-  console.log(🚀 Backend running on port ${PORT});
+  console.log( `Backend running on port ${PORT}`);
 });
