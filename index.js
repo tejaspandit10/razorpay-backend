@@ -279,6 +279,7 @@ app.post("/verify-payment", async (req, res) => {
       razorpay_payment_id,
       razorpay_signature,
       userId,
+      agentTempData, // for agent flow
       amount,
       gst,
     } = req.body;
@@ -294,32 +295,86 @@ app.post("/verify-payment", async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    //////////////////////////////////////////////////////
+    // USER PAYMENT FLOW
+    //////////////////////////////////////////////////////
+    if (userId) {
 
-    if (!user) {
-      return res.status(400).json({ error: "User not found" });
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return res.status(400).json({ error: "User not found" });
+      }
+
+      await prisma.payment.create({
+        data: {
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          amount: parseInt(amount),
+          gst: parseInt(gst),
+          status: "SUCCESS",
+          userId: user.id,
+          agentId: user.agentId,
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { paymentStatus: "SUCCESS" },
+      });
+
+      return res.json({ success: true });
     }
 
-    await prisma.payment.create({
-      data: {
-        razorpayOrderId: razorpay_order_id,
-        razorpayPaymentId: razorpay_payment_id,
-        amount: parseInt(amount),
-        gst: parseInt(gst),
-        status: "SUCCESS",
-        userId: user.id,
-        agentId: user.agentId,
-      },
-    });
+    //////////////////////////////////////////////////////
+    // AGENT PAYMENT FLOW
+    //////////////////////////////////////////////////////
+    if (agentTempData) {
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { paymentStatus: "SUCCESS" },
-    });
+      const {
+        name,
+        email,
+        phone,
+        aadhaarNumber,
+        addressFull,
+        addressCity,
+        addressState,
+        addressPincode,
+        occupation,
+      } = agentTempData;
 
-    res.json({ success: true });
+      const agent = await prisma.agent.create({
+        data: {
+          name,
+          email,
+          phone,
+          aadhaarNumber,
+          addressFull,
+          addressCity,
+          addressState,
+          addressPincode,
+          occupation,
+          isActive: false,
+        },
+      });
+
+      await prisma.payment.create({
+        data: {
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          amount: parseInt(amount),
+          gst: parseInt(gst),
+          status: "SUCCESS",
+          agentId: agent.id,
+        },
+      });
+
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ error: "Invalid payment request" });
 
   } catch (error) {
     console.error("Verify error:", error);
