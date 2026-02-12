@@ -89,7 +89,7 @@ app.post("/api/agents/register", async (req, res) => {
     });
 
     res.json({
-      message: "Agent registered successfully. Awaiting admin approval.",
+      message: "Agent registered. Awaiting admin approval.",
       agentCode: agent.agentCode,
     });
   } catch (error) {
@@ -99,7 +99,7 @@ app.post("/api/agents/register", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////
-// VALIDATE AGENT CODE (Apply Form)
+// VALIDATE AGENT CODE
 ////////////////////////////////////////////////////
 app.post("/api/agents/validate-code", async (req, res) => {
   try {
@@ -114,80 +114,40 @@ app.post("/api/agents/validate-code", async (req, res) => {
     });
 
     if (!agent || !agent.isActive) {
-      return res
-        .status(400)
-        .json({ error: "Invalid or inactive agent code" });
+      return res.status(400).json({
+        error: "Invalid or inactive agent code",
+      });
     }
 
     res.json({ valid: true, agentId: agent.id });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Validation failed" });
   }
 });
 
 ////////////////////////////////////////////////////
-// ADMIN APPROVE AGENT
-////////////////////////////////////////////////////
-app.post("/api/admin/approve-agent", async (req, res) => {
-  try {
-    const { agentId } = req.body;
-
-    await prisma.agent.update({
-      where: { id: agentId },
-      data: {
-        isActive: true,
-        approvedAt: new Date(),
-      },
-    });
-
-    res.json({ message: "Agent approved successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Approval failed" });
-  }
-});
-
-////////////////////////////////////////////////////
-// CREATE USER (Before Payment)
+// CREATE USER BEFORE PAYMENT
 ////////////////////////////////////////////////////
 app.post("/api/users/create", async (req, res) => {
   try {
-    const {
-      firstName,
-      middleName,
-      lastName,
-      email,
-      phone,
-      aadhaar,
-      dob,
-      gender,
-      address,
-      preferredSector,
-      preferredJobType,
-      careerGoal,
-      skills,
-      englishProficiency,
-      expectedSalary,
-      preferredLocation,
-      hasPreviousExperience,
-      resumeUrl,
-      agentCode,
-    } = req.body;
+    const data = req.body;
 
-    if (!firstName || !lastName || !email || !phone || !aadhaar) {
+    if (!data.firstName || !data.lastName || !data.email || !data.phone) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     let agentId = null;
 
-    if (agentCode) {
+    if (data.agentCode) {
       const agent = await prisma.agent.findUnique({
-        where: { agentCode },
+        where: { agentCode: data.agentCode },
       });
 
       if (!agent || !agent.isActive) {
-        return res.status(400).json({ error: "Invalid or inactive agent code" });
+        return res.status(400).json({
+          error: "Invalid or inactive agent code",
+        });
       }
 
       agentId = agent.id;
@@ -195,24 +155,24 @@ app.post("/api/users/create", async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
-        firstName,
-        middleName,
-        lastName,
-        email,
-        phone,
-        aadhaar,
-        dob: new Date(dob),
-        gender,
-        address,
-        preferredSector,
-        preferredJobType,
-        careerGoal,
-        skills,
-        englishProficiency,
-        expectedSalary: Number(expectedSalary),
-        preferredLocation,
-        hasPreviousExperience: hasPreviousExperience === true,
-        resumeUrl,
+        firstName: data.firstName,
+        middleName: data.middleName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        aadhaar: data.aadhaar,
+        dob: new Date(data.dob),
+        gender: data.gender,
+        address: data.address,
+        preferredSector: data.preferredSector || [],
+        preferredJobType: data.preferredJobType,
+        careerGoal: data.careerGoal,
+        skills: data.skills,
+        englishProficiency: data.englishProficiency,
+        expectedSalary: parseInt(data.expectedSalary),
+        preferredLocation: data.preferredLocation,
+        hasPreviousExperience: data.hasPreviousExperience === true,
+        resumeUrl: data.resumeUrl || null,
         paymentStatus: "PENDING",
         agentId,
       },
@@ -247,13 +207,13 @@ app.post("/create-order", async (req, res) => {
 
     res.json(order);
   } catch (error) {
-    console.error("Order creation error:", error);
+    console.error(error);
     res.status(500).json({ error: "Order creation failed" });
   }
 });
 
 ////////////////////////////////////////////////////
-// VERIFY PAYMENT
+// VERIFY PAYMENT + SAVE TO DB
 ////////////////////////////////////////////////////
 app.post("/verify-payment", async (req, res) => {
   try {
@@ -279,27 +239,24 @@ app.post("/verify-payment", async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { agent: true },
     });
 
     if (!user) {
       return res.status(400).json({ error: "User not found" });
     }
 
-    // Save payment
     await prisma.payment.create({
       data: {
         razorpayOrderId: razorpay_order_id,
         razorpayPaymentId: razorpay_payment_id,
-        amount,
-        gst,
+        amount: parseInt(amount),
+        gst: parseInt(gst),
         status: "SUCCESS",
         userId: user.id,
         agentId: user.agentId,
       },
     });
 
-    // Update user status
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -308,90 +265,9 @@ app.post("/verify-payment", async (req, res) => {
     });
 
     res.json({ success: true });
-  } catch (err) {
-    console.error("Verify error:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-////////////////////////////////////////////////////
-// CREATE USER (Before Payment)
-////////////////////////////////////////////////////
-app.post("/api/users/create", async (req, res) => {
-  try {
-    const {
-      firstName,
-      middleName,
-      lastName,
-      email,
-      phone,
-      aadhaar,
-      dob,
-      gender,
-      address,
-      preferredSector,
-      preferredJobType,
-      careerGoal,
-      skills,
-      englishProficiency,
-      expectedSalary,
-      preferredLocation,
-      hasPreviousExperience,
-      resumeUrl,
-      agentCode, // optional
-    } = req.body;
-
-    // Basic validation
-    if (!firstName || !lastName || !email || !phone) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    let agent = null;
-
-    if (agentCode) {
-      agent = await prisma.agent.findUnique({
-        where: { agentCode },
-      });
-
-      if (!agent || !agent.isActive) {
-        return res.status(400).json({
-          error: "Invalid or inactive agent code",
-        });
-      }
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        firstName,
-        middleName,
-        lastName,
-        email,
-        phone,
-        aadhaar,
-        dob: new Date(dob),
-        gender,
-        address,
-        preferredSector,
-        preferredJobType,
-        careerGoal,
-        skills,
-        englishProficiency,
-        expectedSalary: parseInt(expectedSalary),
-        preferredLocation,
-        hasPreviousExperience: hasPreviousExperience === true,
-        resumeUrl,
-        paymentStatus: "PENDING",
-        agentId: agent ? agent.id : null,
-      },
-    });
-
-    res.json({
-      message: "User created",
-      userId: user.id,
-    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "User creation failed" });
+    console.error("Verify error:", error);
+    res.status(500).json({ success: false });
   }
 });
 
@@ -399,5 +275,5 @@ app.post("/api/users/create", async (req, res) => {
 // START SERVER
 ////////////////////////////////////////////////////
 app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+  console.log(🚀 Backend running on port ${PORT});
 });
