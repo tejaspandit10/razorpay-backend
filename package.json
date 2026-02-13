@@ -20,5 +20,11 @@
     "nanoid": "^5.1.6",
     "prisma": "^6.19.2",
     "razorpay": "^2.9.6"
-  }
+  },
+"scripts": {
+  "build": "prisma generate",
+  "postinstall": "prisma generate",
+  "start": "node index.js",
+  "migrate": "prisma migrate deploy"
+}
 }
