@@ -3,6 +3,7 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
+import nodemailer from "nodemailer";
 import pkg from "@prisma/client";
 import { nanoid } from "nanoid";
 
@@ -42,7 +43,7 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-import nodemailer from "nodemailer";
+
 
 // ================= EMAIL SETUP =================
 const transporter = nodemailer.createTransport({
