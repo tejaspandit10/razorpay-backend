@@ -15,8 +15,6 @@ app.use(express.json());
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 
-console.log(prisma._baseDmmf.datamodel.models.find(m => m.name === "Payment"));
-
 const PORT = process.env.PORT || 5000;
 
 ////////////////////////////////////////////////////
