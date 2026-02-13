@@ -41,7 +41,7 @@ model Agent {
 
   occupation      String
 
-  agentCode       String   @unique
+  agentCode       String?   @unique
   isActive        Boolean  @default(false)
 
   createdAt       DateTime @default(now())
@@ -109,8 +109,8 @@ model Payment {
   status                PaymentStatus
 
   // Relations
-  userId                String
-  user                  User   @relation(fields: [userId], references: [id])
+  userId                String?
+  user                  User?   @relation(fields: [userId], references: [id])
 
   agentId               String?
   agent                 Agent? @relation(fields: [agentId], references: [id])

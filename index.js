@@ -314,7 +314,7 @@ app.post("/verify-payment", async (req, res) => {
           razorpayPaymentId: razorpay_payment_id,
           amount: parseInt(amount),
           gst: parseInt(gst),
-          status: "SUCCESS",
+          status: PaymentStatus.SUCCESS,
           userId: user.id,
           agentId: user.agentId,
         },
@@ -366,7 +366,7 @@ app.post("/verify-payment", async (req, res) => {
           razorpayPaymentId: razorpay_payment_id,
           amount: parseInt(amount),
           gst: parseInt(gst),
-          status: "SUCCESS",
+          status: PaymentStatus.SUCCESS,
           agentId: agent.id,
         },
       });
