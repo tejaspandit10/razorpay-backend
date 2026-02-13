@@ -136,6 +136,7 @@ app.post("/create-order", async (req, res) => {
 ////////////////////////////////////////////////////
 // VERIFY PAYMENT
 ////////////////////////////////////////////////////
+
 app.post("/verify-payment", async (req, res) => {
   try {
     const {
@@ -162,30 +163,21 @@ app.post("/verify-payment", async (req, res) => {
     //////////////////////////////////////////////////////
     // USER PAYMENT FLOW
     //////////////////////////////////////////////////////
+
     if (userId) {
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        return res.status(400).json({ error: "User not found" });
-      }
-
-      await prisma.payment.create({
+      await prisma.userPayment.create({
         data: {
           razorpayOrderId: razorpay_order_id,
           razorpayPaymentId: razorpay_payment_id,
           amount: parseInt(amount),
           gst: parseInt(gst),
           status: "SUCCESS",
-          userId: user.id,
-          agentId: user.agentId,
+          userId,
         },
       });
 
       await prisma.user.update({
-        where: { id: user.id },
+        where: { id: userId },
         data: { paymentStatus: "SUCCESS" },
       });
 
@@ -195,57 +187,19 @@ app.post("/verify-payment", async (req, res) => {
     //////////////////////////////////////////////////////
     // AGENT PAYMENT FLOW
     //////////////////////////////////////////////////////
+
     if (agentTempData) {
-
-      const {
-        name,
-        email,
-        phone,
-        aadhaarNumber,
-        addressFull,
-        addressCity,
-        addressState,
-        addressPincode,
-        occupation,
-      } = agentTempData;
-
-      // Duplicate check
-      const existingAgent = await prisma.agent.findFirst({
-        where: {
-          OR: [
-            { email },
-            { aadhaarNumber }
-          ]
-        }
-      });
-
-      if (existingAgent) {
-        return res.status(400).json({
-          success: false,
-          error: "Agent with this Email or Aadhaar already exists"
-        });
-      }
-
-      // Generate agent code immediately
       const agentCode = nanoid(8).toUpperCase();
 
       const agent = await prisma.agent.create({
         data: {
-          name,
-          email,
-          phone,
-          aadhaarNumber,
-          addressFull,
-          addressCity,
-          addressState,
-          addressPincode,
-          occupation,
+          ...agentTempData,
           agentCode,
-          isActive: false
+          isActive: false,
         },
       });
 
-      await prisma.payment.create({
+      await prisma.agentPayment.create({
         data: {
           razorpayOrderId: razorpay_order_id,
           razorpayPaymentId: razorpay_payment_id,
@@ -258,11 +212,11 @@ app.post("/verify-payment", async (req, res) => {
 
       return res.json({
         success: true,
-        agentCode: agent.agentCode,
+        agentCode,
       });
     }
 
-    return res.status(400).json({ error: "Invalid payment request" });
+    res.status(400).json({ error: "Invalid payment flow" });
 
   } catch (error) {
     console.error("Verify error:", error);

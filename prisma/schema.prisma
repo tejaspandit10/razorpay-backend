@@ -27,30 +27,26 @@ enum AdminRole {
 //////////////////////
 
 model Agent {
-  id String @id @default(uuid())
+  id              String   @id @default(uuid())
 
-  name          String
-  email         String @unique
-  phone         String
-  aadhaarNumber String @unique
+  name            String
+  email           String   @unique
+  phone           String
+  aadhaarNumber   String   @unique
 
-  addressFull    String
-  addressCity    String
-  addressState   String
-  addressPincode String
+  addressFull     String
+  addressCity     String
+  addressState    String
+  addressPincode  String
+  occupation      String
 
-  occupation String
+  agentCode       String   @unique
+  isActive        Boolean  @default(false)
 
-  agentCode String  @unique
-  isActive  Boolean @default(false)
+  createdAt       DateTime @default(now())
+  approvedAt      DateTime?
 
-  createdAt  DateTime  @default(now())
-  approvedAt DateTime?
-
-  // Relations
-  users         User[]
-  payments      Payment[]
-  agentPayments AgentPayment[]
+  payments        AgentPayment[]
 
   @@map("agents")
 }
@@ -60,38 +56,33 @@ model Agent {
 //////////////////////
 
 model User {
-  id String @id @default(uuid())
+  id                     String   @id @default(uuid())
 
-  firstName  String
-  middleName String?
-  lastName   String
-  email      String
-  phone      String
-  aadhaar    String
-  dob        DateTime
-  gender     String
-  address    String
+  firstName              String
+  middleName             String?
+  lastName               String
+  email                  String
+  phone                  String
+  aadhaar                String
+  dob                    DateTime
+  gender                 String
+  address                String
 
-  preferredSector       Json
-  preferredJobType      String
-  careerGoal            String
-  skills                String
-  englishProficiency    String
-  expectedSalary        Int
-  preferredLocation     String
-  hasPreviousExperience Boolean
+  preferredSector        Json
+  preferredJobType       String
+  careerGoal             String
+  skills                 String
+  englishProficiency     String
+  expectedSalary         Int
+  preferredLocation      String
+  hasPreviousExperience  Boolean
 
-  resumeUrl String?
+  resumeUrl              String?
+  paymentStatus          PaymentStatus @default(PENDING)
 
-  paymentStatus PaymentStatus @default(PENDING)
+  createdAt              DateTime @default(now())
 
-  // Relations
-  agentId String?
-  agent   Agent?  @relation(fields: [agentId], references: [id])
-
-  payments Payment[]
-
-  createdAt DateTime @default(now())
+  payments               UserPayment[]
 
   @@map("users")
 }
@@ -100,24 +91,21 @@ model User {
 // USER PAYMENTS
 //////////////////////
 
-model Payment {
-  id String @id @default(uuid())
+model UserPayment {
+  id                    String   @id @default(uuid())
 
-  razorpayOrderId   String
-  razorpayPaymentId String
-  amount            Int
-  gst               Int
-  status            PaymentStatus
+  razorpayOrderId       String
+  razorpayPaymentId     String
+  amount                Int
+  gst                   Int
+  status                PaymentStatus
 
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
+  userId                String
+  user                  User   @relation(fields: [userId], references: [id])
 
-  agentId String?
-  agent   Agent?  @relation(fields: [agentId], references: [id])
+  createdAt             DateTime @default(now())
 
-  createdAt DateTime @default(now())
-
-  @@map("payments")
+  @@map("user_payments")
 }
 
 //////////////////////
@@ -125,18 +113,18 @@ model Payment {
 //////////////////////
 
 model AgentPayment {
-  id String @id @default(uuid())
+  id                    String   @id @default(uuid())
 
-  razorpayOrderId   String
-  razorpayPaymentId String
-  amount            Int
-  gst               Int
-  status            PaymentStatus
+  razorpayOrderId       String
+  razorpayPaymentId     String
+  amount                Int
+  gst                   Int
+  status                PaymentStatus
 
-  agentId String
-  agent   Agent  @relation(fields: [agentId], references: [id])
+  agentId               String
+  agent                 Agent   @relation(fields: [agentId], references: [id])
 
-  createdAt DateTime @default(now())
+  createdAt             DateTime @default(now())
 
   @@map("agent_payments")
 }
@@ -146,14 +134,14 @@ model AgentPayment {
 //////////////////////
 
 model Admin {
-  id String @id @default(uuid())
+  id            String    @id @default(uuid())
 
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         AdminRole @default(ADMIN)
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          AdminRole @default(ADMIN)
 
-  createdAt DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@map("admins")
 }
