@@ -8,6 +8,10 @@ import { nanoid } from "nanoid";
 
 dotenv.config();
 
+console.log("🚀 Backend starting...");
+console.log("SMTP HOST:", process.env.SMTP_HOST);
+console.log("SMTP USER:", process.env.SMTP_USER);
+
 const app = express();
 app.use(cors());
 app.use(express.json());
