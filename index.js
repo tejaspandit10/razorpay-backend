@@ -126,24 +126,16 @@ app.post("/api/agents/approve", async (req, res) => {
   try {
     const { agentId } = req.body;
 
-    if (!agentId) {
-      return res.status(400).json({ error: "Agent ID required" });
-    }
-
-    const agentCode = nanoid(8).toUpperCase();
-
     const agent = await prisma.agent.update({
       where: { id: agentId },
       data: {
         isActive: true,
-        agentCode,
         approvedAt: new Date(),
       },
     });
 
     res.json({
       message: "Agent approved successfully",
-      agentCode: agent.agentCode,
     });
 
   } catch (error) {
