@@ -46,134 +46,6 @@ app.get("/", (req, res) => {
 });
 
 ////////////////////////////////////////////////////
-// AGENT REGISTRATION (AADHAAR REQUIRED)
-////////////////////////////////////////////////////
-app.post("/api/agents/register", async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      phone,
-      aadhaarNumber,
-      addressFull,
-      addressCity,
-      addressState,
-      addressPincode,
-      occupation,
-    } = req.body;
-
-    // ✅ Required validation
-    if (!name || !email || !phone || !aadhaarNumber) {
-      return res.status(400).json({
-        error: "All fields including Aadhaar are required",
-      });
-    }
-
-    // ✅ Aadhaar validation
-    if (!/^\d{12}$/.test(aadhaarNumber)) {
-      return res.status(400).json({
-        error: "Invalid Aadhaar number (must be 12 digits)",
-      });
-    }
-
-    // ✅ Prevent duplicate email or Aadhaar
-    const existingAgent = await prisma.agent.findFirst({
-      where: {
-        OR: [
-          { email },
-          { aadhaarNumber }
-        ]
-      }
-    });
-
-    if (existingAgent) {
-      return res.status(400).json({
-        error: "Agent with this Email or Aadhaar already exists",
-      });
-    }
-
-    const agent = await prisma.agent.create({
-      data: {
-        name,
-        email,
-        phone,
-        aadhaarNumber,
-        addressFull,
-        addressCity,
-        addressState,
-        addressPincode,
-        occupation,
-        isActive: false,   // Will be activated by admin
-        agentCode: null,   // Generated only after approval
-      },
-    });
-
-    res.json({
-      message: "Agent registered successfully. Awaiting admin approval.",
-      agentId: agent.id,
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Agent registration failed" });
-  }
-});
-
-////////////////////////////////////////////////////
-// ADMIN APPROVE AGENT
-////////////////////////////////////////////////////
-app.post("/api/agents/approve", async (req, res) => {
-  try {
-    const { agentId } = req.body;
-
-    const agent = await prisma.agent.update({
-      where: { id: agentId },
-      data: {
-        isActive: true,
-        approvedAt: new Date(),
-      },
-    });
-
-    res.json({
-      message: "Agent approved successfully",
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Approval failed" });
-  }
-});
-
-////////////////////////////////////////////////////
-// VALIDATE AGENT CODE
-////////////////////////////////////////////////////
-app.post("/api/agents/validate-code", async (req, res) => {
-  try {
-    const { agentCode } = req.body;
-
-    if (!agentCode) {
-      return res.status(400).json({ error: "Agent code required" });
-    }
-
-    const agent = await prisma.agent.findUnique({
-      where: { agentCode },
-    });
-
-    if (!agent || !agent.isActive) {
-      return res.status(400).json({
-        error: "Invalid or inactive agent code",
-      });
-    }
-
-    res.json({ valid: true, agentId: agent.id });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Validation failed" });
-  }
-});
-
-////////////////////////////////////////////////////
 // CREATE USER BEFORE PAYMENT
 ////////////////////////////////////////////////////
 app.post("/api/users/create", async (req, res) => {
@@ -262,7 +134,7 @@ app.post("/create-order", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////
-// VERIFY PAYMENT + SAVE TO DB
+// VERIFY PAYMENT
 ////////////////////////////////////////////////////
 app.post("/verify-payment", async (req, res) => {
   try {
@@ -271,7 +143,7 @@ app.post("/verify-payment", async (req, res) => {
       razorpay_payment_id,
       razorpay_signature,
       userId,
-      agentTempData, // for agent flow
+      agentTempData,
       amount,
       gst,
     } = req.body;
@@ -306,7 +178,7 @@ app.post("/verify-payment", async (req, res) => {
           razorpayPaymentId: razorpay_payment_id,
           amount: parseInt(amount),
           gst: parseInt(gst),
-          status: PaymentStatus.SUCCESS,
+          status: "SUCCESS",
           userId: user.id,
           agentId: user.agentId,
         },
@@ -320,64 +192,135 @@ app.post("/verify-payment", async (req, res) => {
       return res.json({ success: true });
     }
 
-    /////////////////////////////////////////////////////
-// AGENT PAYMENT FLOW
-////////////////////////////////////////////////////
-if (agentTempData) {
+    //////////////////////////////////////////////////////
+    // AGENT PAYMENT FLOW
+    //////////////////////////////////////////////////////
+    if (agentTempData) {
 
-  const {
-    name,
-    email,
-    phone,
-    aadhaarNumber,
-    addressFull,
-    addressCity,
-    addressState,
-    addressPincode,
-    occupation,
-  } = agentTempData;
+      const {
+        name,
+        email,
+        phone,
+        aadhaarNumber,
+        addressFull,
+        addressCity,
+        addressState,
+        addressPincode,
+        occupation,
+      } = agentTempData;
 
-  // ✅ Generate agent code immediately
-  const agentCode = nanoid(8).toUpperCase();
+      // Duplicate check
+      const existingAgent = await prisma.agent.findFirst({
+        where: {
+          OR: [
+            { email },
+            { aadhaarNumber }
+          ]
+        }
+      });
 
-  const agent = await prisma.agent.create({
-    data: {
-      name,
-      email,
-      phone,
-      aadhaarNumber,
-      addressFull,
-      addressCity,
-      addressState,
-      addressPincode,
-      occupation,
-      agentCode,      // 🔥 generated here
-      isActive: false // still inactive
-    },
-  });
+      if (existingAgent) {
+        return res.status(400).json({
+          success: false,
+          error: "Agent with this Email or Aadhaar already exists"
+        });
+      }
 
-  await prisma.payment.create({
-    data: {
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      amount: parseInt(amount),
-      gst: parseInt(gst),
-      status: "SUCCESS",
-      agentId: agent.id,
-    },
-  });
+      // Generate agent code immediately
+      const agentCode = nanoid(8).toUpperCase();
 
-  return res.json({
-    success: true,
-    agentCode: agent.agentCode,  // ✅ return to frontend
-  });
-}
+      const agent = await prisma.agent.create({
+        data: {
+          name,
+          email,
+          phone,
+          aadhaarNumber,
+          addressFull,
+          addressCity,
+          addressState,
+          addressPincode,
+          occupation,
+          agentCode,
+          isActive: false
+        },
+      });
+
+      await prisma.payment.create({
+        data: {
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          amount: parseInt(amount),
+          gst: parseInt(gst),
+          status: "SUCCESS",
+          agentId: agent.id,
+        },
+      });
+
+      return res.json({
+        success: true,
+        agentCode: agent.agentCode,
+      });
+    }
 
     return res.status(400).json({ error: "Invalid payment request" });
 
   } catch (error) {
     console.error("Verify error:", error);
     res.status(500).json({ success: false });
+  }
+});
+
+////////////////////////////////////////////////////
+// VALIDATE AGENT CODE
+////////////////////////////////////////////////////
+app.post("/api/agents/validate-code", async (req, res) => {
+  try {
+    const { agentCode } = req.body;
+
+    if (!agentCode) {
+      return res.status(400).json({ error: "Agent code required" });
+    }
+
+    const agent = await prisma.agent.findUnique({
+      where: { agentCode },
+    });
+
+    if (!agent || !agent.isActive) {
+      return res.status(400).json({
+        error: "Invalid or inactive agent code",
+      });
+    }
+
+    res.json({ valid: true, agentId: agent.id });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Validation failed" });
+  }
+});
+
+////////////////////////////////////////////////////
+// ADMIN APPROVE AGENT
+////////////////////////////////////////////////////
+app.post("/api/agents/approve", async (req, res) => {
+  try {
+    const { agentId } = req.body;
+
+    await prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        isActive: true,
+        approvedAt: new Date(),
+      },
+    });
+
+    res.json({
+      message: "Agent approved successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Approval failed" });
   }
 });
 
