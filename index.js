@@ -38,6 +38,28 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+import nodemailer from "nodemailer";
+
+// ================= EMAIL SETUP =================
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// ✅ SMTP TEST
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log("❌ SMTP Error:", error);
+  } else {
+    console.log("✅ SMTP Server is ready to send emails");
+  }
+});
+
 ////////////////////////////////////////////////////
 // HEALTH CHECK
 ////////////////////////////////////////////////////
