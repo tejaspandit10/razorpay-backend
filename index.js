@@ -328,51 +328,58 @@ app.post("/verify-payment", async (req, res) => {
       return res.json({ success: true });
     }
 
-    //////////////////////////////////////////////////////
-    // AGENT PAYMENT FLOW
-    //////////////////////////////////////////////////////
-    if (agentTempData) {
+    /////////////////////////////////////////////////////
+// AGENT PAYMENT FLOW
+////////////////////////////////////////////////////
+if (agentTempData) {
 
-      const {
-        name,
-        email,
-        phone,
-        aadhaarNumber,
-        addressFull,
-        addressCity,
-        addressState,
-        addressPincode,
-        occupation,
-      } = agentTempData;
+  const {
+    name,
+    email,
+    phone,
+    aadhaarNumber,
+    addressFull,
+    addressCity,
+    addressState,
+    addressPincode,
+    occupation,
+  } = agentTempData;
 
-      const agent = await prisma.agent.create({
-        data: {
-          name,
-          email,
-          phone,
-          aadhaarNumber,
-          addressFull,
-          addressCity,
-          addressState,
-          addressPincode,
-          occupation,
-          isActive: false,
-        },
-      });
+  // ✅ Generate agent code immediately
+  const agentCode = nanoid(8).toUpperCase();
 
-      await prisma.payment.create({
-        data: {
-          razorpayOrderId: razorpay_order_id,
-          razorpayPaymentId: razorpay_payment_id,
-          amount: parseInt(amount),
-          gst: parseInt(gst),
-          status: PaymentStatus.SUCCESS,
-          agentId: agent.id,
-        },
-      });
+  const agent = await prisma.agent.create({
+    data: {
+      name,
+      email,
+      phone,
+      aadhaarNumber,
+      addressFull,
+      addressCity,
+      addressState,
+      addressPincode,
+      occupation,
+      agentCode,      // 🔥 generated here
+      isActive: false // still inactive
+    },
+  });
 
-      return res.json({ success: true });
-    }
+  await prisma.payment.create({
+    data: {
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      amount: parseInt(amount),
+      gst: parseInt(gst),
+      status: "SUCCESS",
+      agentId: agent.id,
+    },
+  });
+
+  return res.json({
+    success: true,
+    agentCode: agent.agentCode,  // ✅ return to frontend
+  });
+}
 
     return res.status(400).json({ error: "Invalid payment request" });
 
