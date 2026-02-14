@@ -3,15 +3,11 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 import pkg from "@prisma/client";
 import { nanoid } from "nanoid";
 
 dotenv.config();
-
-console.log("🚀 Backend starting...");
-console.log("SMTP HOST:", process.env.SMTP_HOST);
-console.log("SMTP USER:", process.env.SMTP_USER);
 
 const app = express();
 app.use(cors());
@@ -19,6 +15,8 @@ app.use(express.json());
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const PORT = process.env.PORT || 5000;
 
@@ -43,27 +41,6 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-
-
-// ================= EMAIL SETUP =================
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// ✅ SMTP TEST
-transporter.verify(function (error, success) {
-  if (error) {
-    console.log("❌ SMTP Error:", error);
-  } else {
-    console.log("✅ SMTP Server is ready to send emails");
-  }
-});
 
 ////////////////////////////////////////////////////
 // HEALTH CHECK
@@ -176,6 +153,10 @@ app.post("/verify-payment", async (req, res) => {
       gst,
     } = req.body;
 
+    //////////////////////////////////////////////////////
+    // 1️⃣ VERIFY SIGNATURE
+    //////////////////////////////////////////////////////
+
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
@@ -184,14 +165,26 @@ app.post("/verify-payment", async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({
+        success: false,
+        error: "Invalid payment signature",
+      });
     }
 
     //////////////////////////////////////////////////////
-    // USER PAYMENT FLOW
+    // 2️⃣ USER PAYMENT FLOW
     //////////////////////////////////////////////////////
 
     if (userId) {
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return res.status(400).json({ error: "User not found" });
+      }
+
       await prisma.userPayment.create({
         data: {
           razorpayOrderId: razorpay_order_id,
@@ -208,21 +201,41 @@ app.post("/verify-payment", async (req, res) => {
         data: { paymentStatus: "SUCCESS" },
       });
 
+      //////////////////////////////////////////////////////
+      // 📧 SEND USER EMAIL
+      //////////////////////////////////////////////////////
+
+      await sgMail.send({
+        to: user.email,
+        from: process.env.FROM_EMAIL,
+        subject: "Payment Successful – APCC Registration",
+        html: `
+          <h2>Payment Successful ✅</h2>
+          <p>Dear ${user.firstName},</p>
+          <p>Your registration payment has been received successfully.</p>
+          <p>Amount Paid: ₹${amount}</p>
+          <p>Transaction ID: ${razorpay_payment_id}</p>
+          <br/>
+          <p>Regards,<br/>APCC Team</p>
+        `,
+      });
+
       return res.json({ success: true });
     }
 
     //////////////////////////////////////////////////////
-    // AGENT PAYMENT FLOW
+    // 3️⃣ AGENT PAYMENT FLOW
     //////////////////////////////////////////////////////
 
     if (agentTempData) {
+
       const agentCode = nanoid(8).toUpperCase();
 
       const agent = await prisma.agent.create({
         data: {
           ...agentTempData,
           agentCode,
-          isActive: false,
+          isActive: false, // admin will approve later
         },
       });
 
@@ -237,17 +250,46 @@ app.post("/verify-payment", async (req, res) => {
         },
       });
 
+      //////////////////////////////////////////////////////
+      // 📧 SEND AGENT EMAIL
+      //////////////////////////////////////////////////////
+
+      await sgMail.send({
+        to: agent.email,
+        from: process.env.FROM_EMAIL,
+        subject: "Agent Registration Successful – APCC",
+        html: `
+          <h2>Registration Successful ✅</h2>
+          <p>Dear ${agent.name},</p>
+          <p>Your agent registration payment has been received.</p>
+          <p><strong>Your Agent Code:</strong> ${agentCode}</p>
+          <p>Your account is currently under admin review.</p>
+          <br/>
+          <p>Regards,<br/>APCC Team</p>
+        `,
+      });
+
       return res.json({
         success: true,
         agentCode,
       });
     }
 
-    res.status(400).json({ error: "Invalid payment flow" });
+    //////////////////////////////////////////////////////
+    // INVALID FLOW
+    //////////////////////////////////////////////////////
+
+    return res.status(400).json({
+      success: false,
+      error: "Invalid payment flow",
+    });
 
   } catch (error) {
     console.error("Verify error:", error);
-    res.status(500).json({ success: false });
+    return res.status(500).json({
+      success: false,
+      error: "Server error during verification",
+    });
   }
 });
 
