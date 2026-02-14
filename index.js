@@ -184,7 +184,7 @@ app.post("/verify-payment", async (req, res) => {
         return res.status(400).json({ error: "User not found" });
       }
 
-      await prisma.userPayment.create({
+      await prisma.payment.create({
         data: {
           razorpayOrderId: razorpay_order_id,
           razorpayPaymentId: razorpay_payment_id,
