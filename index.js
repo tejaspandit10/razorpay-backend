@@ -219,6 +219,24 @@ app.post("/verify-payment", async (req, res) => {
         `,
       });
 
+      //////////////////////////////////////////////////////
+      // 📧 SEND ADMIN EMAIL (NEW)
+      //////////////////////////////////////////////////////
+
+      await sgMail.send({
+        to: process.env.ADMIN_EMAIL,
+        from: process.env.FROM_EMAIL,
+        subject: "🆕 New User Registration – APCC",
+        html: `
+          <h2>New User Registered</h2>
+          <p><strong>Name:</strong> ${user.firstName} ${user.lastName}</p>
+          <p><strong>Email:</strong> ${user.email}</p>
+          <p><strong>Phone:</strong> ${user.phone}</p>
+          <p><strong>Amount Paid:</strong> ₹${amount}</p>
+          <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
+        `,
+      });
+
       return res.json({ success: true });
     }
 
@@ -234,7 +252,7 @@ app.post("/verify-payment", async (req, res) => {
         data: {
           ...agentTempData,
           agentCode,
-          isActive: false, // admin will approve later
+          isActive: false,
         },
       });
 
@@ -265,6 +283,25 @@ app.post("/verify-payment", async (req, res) => {
           <p>Your account is currently under admin review.</p>
           <br/>
           <p>Regards,<br/>APCC Team</p>
+        `,
+      });
+
+      //////////////////////////////////////////////////////
+      // 📧 SEND ADMIN EMAIL (NEW)
+      //////////////////////////////////////////////////////
+
+      await sgMail.send({
+        to: process.env.ADMIN_EMAIL,
+        from: process.env.FROM_EMAIL,
+        subject: "🆕 New Agent Registration – APCC",
+        html: `
+          <h2>New Agent Registered</h2>
+          <p><strong>Name:</strong> ${agent.name}</p>
+          <p><strong>Email:</strong> ${agent.email}</p>
+          <p><strong>Phone:</strong> ${agent.phone}</p>
+          <p><strong>Agent Code:</strong> ${agentCode}</p>
+          <p><strong>Amount Paid:</strong> ₹${amount}</p>
+          <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
         `,
       });
 
