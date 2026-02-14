@@ -97,7 +97,6 @@ app.post("/api/users/create", async (req, res) => {
         hasPreviousExperience: data.hasPreviousExperience === true,
         resumeUrl: data.resumeUrl || null,
         paymentStatus: "PENDING",
-        agentId,
       },
     });
 
