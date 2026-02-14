@@ -6,6 +6,9 @@ import dotenv from "dotenv";
 import sgMail from "@sendgrid/mail";
 import pkg from "@prisma/client";
 import { nanoid } from "nanoid";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
 
 dotenv.config();
 
@@ -381,6 +384,73 @@ app.post("/api/agents/approve", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Approval failed" });
   }
+});
+
+////////////////////////////////////////////////////
+// ADMIN AUTH
+///////////////////////////////////////////////////
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const admin = await prisma.admin.findUnique({
+      where: { email },
+    });
+
+    if (!admin) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const validPassword = await bcrypt.compare(
+      password,
+      admin.passwordHash
+    );
+
+    if (!validPassword) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: admin.id, role: admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      role: admin.role,
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+const verifyAdmin = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.admin = decoded;
+    next();
+
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+app.get("/api/admin/agents", verifyAdmin, async (req, res) => {
+  const agents = await prisma.agent.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+  res.json(agents);
 });
 
 ////////////////////////////////////////////////////
