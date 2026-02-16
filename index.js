@@ -247,9 +247,32 @@ app.post("/verify-payment", async (req, res) => {
     // 3️⃣ AGENT PAYMENT FLOW
     //////////////////////////////////////////////////////
 
-    if (agentTempData) {
+   if (agentTempData) {
 
-      const agentCode = nanoid(8).toUpperCase();
+      // Extract initials
+      const nameParts = agentTempData.name.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts[nameParts.length - 1] || "";
+
+      const firstInitial = firstName.charAt(0).toUpperCase();
+      const lastInitial = lastName.charAt(0).toUpperCase();
+
+      // Get last agent
+      const lastAgent = await prisma.agent.findFirst({
+        orderBy: { createdAt: "desc" },
+      });
+
+      let nextNumber = 1000;
+
+      if (lastAgent && lastAgent.agentCode) {
+        const lastDigits = lastAgent.agentCode.slice(2);
+        const parsed = parseInt(lastDigits);
+        if (!isNaN(parsed)) {
+          nextNumber = parsed + 1;
+        }
+      }
+
+      const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
 
       const agent = await prisma.agent.create({
         data: {
@@ -268,6 +291,11 @@ app.post("/verify-payment", async (req, res) => {
           status: "SUCCESS",
           agentId: agent.id,
         },
+      });
+
+      return res.json({
+        success: true,
+        agentCode,
       });
 
       //////////////////////////////////////////////////////
