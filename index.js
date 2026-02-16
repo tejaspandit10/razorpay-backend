@@ -52,7 +52,7 @@ app.get("/", (req, res) => {
   res.send("✅ Backend running with Prisma + Razorpay");
 });
 
-////////////////////////////////////////////////////
+///////////////////////////////////////////////////
 // CREATE USER BEFORE PAYMENT
 ////////////////////////////////////////////////////
 app.post("/api/users/create", async (req, res) => {
@@ -63,21 +63,30 @@ app.post("/api/users/create", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    let agentId = null;
+    //////////////////////////////////////////////////////
+    // 🔥 HANDLE RESUME (BASE64 → BUFFER)
+    //////////////////////////////////////////////////////
 
-    if (data.agentCode) {
-      const agent = await prisma.agent.findUnique({
-        where: { agentCode: data.agentCode },
-      });
+    let resumeBuffer = null;
+    let resumeFileName = null;
+    let resumeMimeType = null;
 
-      if (!agent || !agent.isActive) {
-        return res.status(400).json({
-          error: "Invalid or inactive agent code",
-        });
-      }
+    if (data.resumeBase64) {
+      // Extract actual base64 content
+      const base64Data = data.resumeBase64.split(",")[1];
 
-      agentId = agent.id;
+      resumeBuffer = Buffer.from(base64Data, "base64");
+
+      resumeFileName = data.resumeFileName || "resume.pdf";
+
+      // Extract mime type from header
+      const match = data.resumeBase64.match(/^data:(.+);base64,/);
+      resumeMimeType = match ? match[1] : "application/pdf";
     }
+
+    //////////////////////////////////////////////////////
+    // CREATE USER
+    //////////////////////////////////////////////////////
 
     const user = await prisma.user.create({
       data: {
@@ -98,8 +107,12 @@ app.post("/api/users/create", async (req, res) => {
         expectedSalary: parseInt(data.expectedSalary),
         preferredLocation: data.preferredLocation,
         hasPreviousExperience: data.hasPreviousExperience === true,
-        resumeUrl: data.resumeUrl || null,
         paymentStatus: "PENDING",
+
+        // 🔥 Resume fields (NEW)
+        resume: resumeBuffer,
+        resumeFileName,
+        resumeMimeType,
       },
     });
 
