@@ -40,6 +40,10 @@ model Agent {
   addressPincode  String
   occupation      String
 
+  // 🔥 NEW FIELDS
+  accountNumber   String?
+  ifscCode        String?
+
   agentCode       String   @unique
   isActive        Boolean  @default(false)
 
@@ -50,7 +54,6 @@ model Agent {
 
   @@map("agents")
 }
-
 //////////////////////
 // USERS
 //////////////////////

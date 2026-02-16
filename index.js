@@ -271,6 +271,14 @@ app.post("/verify-payment", async (req, res) => {
           nextNumber = parsed + 1;
         }
       }
+      
+      if (!/^[0-9]{9,18}$/.test(agentTempData.accountNumber)) {
+  return res.status(400).json({ success: false, error: "Invalid Account Number" });
+}
+
+if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(agentTempData.ifscCode)) {
+  return res.status(400).json({ success: false, error: "Invalid IFSC Code" });
+}
 
       const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
 
