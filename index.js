@@ -262,108 +262,104 @@ app.post("/verify-payment", async (req, res) => {
     // 3️⃣ AGENT PAYMENT FLOW
     //////////////////////////////////////////////////////
 
-   if (agentTempData) {
+  if (agentTempData) {
 
-      // Extract initials
-      const nameParts = agentTempData.name.trim().split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts[nameParts.length - 1] || "";
+  // Extract initials
+  const nameParts = agentTempData.name.trim().split(" ");
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts[nameParts.length - 1] || "";
 
-      const firstInitial = firstName.charAt(0).toUpperCase();
-      const lastInitial = lastName.charAt(0).toUpperCase();
+  const firstInitial = firstName.charAt(0).toUpperCase();
+  const lastInitial = lastName.charAt(0).toUpperCase();
 
-      // Get last agent
-      const lastAgent = await prisma.agent.findFirst({
-        orderBy: { createdAt: "desc" },
-      });
+  // Get last agent
+  const lastAgent = await prisma.agent.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
 
-      let nextNumber = 1000;
+  let nextNumber = 1000;
 
-      if (lastAgent && lastAgent.agentCode) {
-        const lastDigits = lastAgent.agentCode.slice(2);
-        const parsed = parseInt(lastDigits);
-        if (!isNaN(parsed)) {
-          nextNumber = parsed + 1;
-        }
-      }
-      
-      if (!/^[0-9]{9,18}$/.test(agentTempData.accountNumber)) {
-  return res.status(400).json({ success: false, error: "Invalid Account Number" });
-}
-
-if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(agentTempData.ifscCode)) {
-  return res.status(400).json({ success: false, error: "Invalid IFSC Code" });
-}
-
-      const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
-
-      const agent = await prisma.agent.create({
-        data: {
-          ...agentTempData,
-          agentCode,
-          isActive: false,
-        },
-      });
-
-      await prisma.agentPayment.create({
-        data: {
-          razorpayOrderId: razorpay_order_id,
-          razorpayPaymentId: razorpay_payment_id,
-          amount: parseInt(amount),
-          gst: parseInt(gst),
-          status: "SUCCESS",
-          agentId: agent.id,
-        },
-      });
-
-      return res.json({
-        success: true,
-        agentCode,
-      });
-
-      //////////////////////////////////////////////////////
-      // 📧 SEND AGENT EMAIL
-      //////////////////////////////////////////////////////
-
-      await sgMail.send({
-        to: agent.email,
-        from: process.env.FROM_EMAIL,
-        subject: "Agent Registration Successful – APCC",
-        html: `
-          <h2>Registration Successful ✅</h2>
-          <p>Dear ${agent.name},</p>
-          <p>Your agent registration payment has been received.</p>
-          <p><strong>Your Agent Code:</strong> ${agentCode}</p>
-          <p>Your account is currently under admin review.</p>
-          <br/>
-          <p>Regards,<br/>APCC Team</p>
-        `,
-      });
-
-      //////////////////////////////////////////////////////
-      // 📧 SEND ADMIN EMAIL (NEW)
-      //////////////////////////////////////////////////////
-
-      await sgMail.send({
-        to: process.env.ADMIN_EMAIL,
-        from: process.env.FROM_EMAIL,
-        subject: "🆕 New Agent Registration – APCC",
-        html: `
-          <h2>New Agent Registered</h2>
-          <p><strong>Name:</strong> ${agent.name}</p>
-          <p><strong>Email:</strong> ${agent.email}</p>
-          <p><strong>Phone:</strong> ${agent.phone}</p>
-          <p><strong>Agent Code:</strong> ${agentCode}</p>
-          <p><strong>Amount Paid:</strong> ₹${amount}</p>
-          <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
-        `,
-      });
-
-      return res.json({
-        success: true,
-        agentCode,
-      });
+  if (lastAgent && lastAgent.agentCode) {
+    const lastDigits = lastAgent.agentCode.slice(2);
+    const parsed = parseInt(lastDigits);
+    if (!isNaN(parsed)) {
+      nextNumber = parsed + 1;
     }
+  }
+
+  if (!/^[0-9]{9,18}$/.test(agentTempData.accountNumber)) {
+    return res.status(400).json({ success: false, error: "Invalid Account Number" });
+  }
+
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(agentTempData.ifscCode)) {
+    return res.status(400).json({ success: false, error: "Invalid IFSC Code" });
+  }
+
+  const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
+
+  const agent = await prisma.agent.create({
+    data: {
+      ...agentTempData,
+      agentCode,
+      isActive: false,
+    },
+  });
+
+  await prisma.agentPayment.create({
+    data: {
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      amount: parseInt(amount),
+      gst: parseInt(gst),
+      status: "SUCCESS",
+      agentId: agent.id,
+    },
+  });
+
+  //////////////////////////////////////////////////////
+  // 📧 SEND AGENT EMAIL
+  //////////////////////////////////////////////////////
+
+  await sgMail.send({
+    to: agent.email,
+    from: process.env.FROM_EMAIL,
+    subject: "Agent Registration Successful – APCC",
+    html: `
+      <h2>Registration Successful ✅</h2>
+      <p>Dear ${agent.name},</p>
+      <p>Your agent registration payment has been received.</p>
+      <p><strong>Your Agent Code:</strong> ${agentCode}</p>
+      <p>Your account is currently under admin review.</p>
+      <br/>
+      <p>Regards,<br/>APCC Team</p>
+    `,
+  });
+
+  //////////////////////////////////////////////////////
+  // 📧 SEND ADMIN EMAIL
+  //////////////////////////////////////////////////////
+
+  await sgMail.send({
+    to: process.env.ADMIN_EMAIL,
+    from: process.env.FROM_EMAIL,
+    subject: "🆕 New Agent Registration – APCC",
+    html: `
+      <h2>New Agent Registered</h2>
+      <p><strong>Name:</strong> ${agent.name}</p>
+      <p><strong>Email:</strong> ${agent.email}</p>
+      <p><strong>Phone:</strong> ${agent.phone}</p>
+      <p><strong>Agent Code:</strong> ${agentCode}</p>
+      <p><strong>Amount Paid:</strong> ₹${amount}</p>
+      <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
+    `,
+  });
+
+  // ✅ RETURN ONLY AFTER EMAILS ARE SENT
+  return res.json({
+    success: true,
+    agentCode,
+  });
+}
 
     //////////////////////////////////////////////////////
     // INVALID FLOW
