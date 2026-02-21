@@ -230,7 +230,7 @@ app.post("/verify-payment", async (req, res) => {
           <h2>Payment Successful ✅</h2>
           <p>Dear ${user.firstName},</p>
           <p>Your registration payment has been received successfully.</p>
-          <p>Amount Paid: ₹${amount}</p>
+          <p>Amount Paid: ₹${amount} + GST</p>
           <p>Transaction ID: ${razorpay_payment_id}</p>
           <br/>
           <p>Regards,<br/>APCC Team</p>
@@ -250,7 +250,7 @@ app.post("/verify-payment", async (req, res) => {
           <p><strong>Name:</strong> ${user.firstName} ${user.lastName}</p>
           <p><strong>Email:</strong> ${user.email}</p>
           <p><strong>Phone:</strong> ${user.phone}</p>
-          <p><strong>Amount Paid:</strong> ₹${amount}</p>
+          <p><strong>Amount Paid:</strong> ₹${amount} + GST</p>
           <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
         `,
       });
@@ -349,7 +349,7 @@ app.post("/verify-payment", async (req, res) => {
       <p><strong>Email:</strong> ${agent.email}</p>
       <p><strong>Phone:</strong> ${agent.phone}</p>
       <p><strong>Agent Code:</strong> ${agentCode}</p>
-      <p><strong>Amount Paid:</strong> ₹${amount}</p>
+      <p><strong>Amount Paid:</strong> ₹${amount} + GST</p>
       <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
     `,
   });
