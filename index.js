@@ -55,6 +55,26 @@ app.get("/", (req, res) => {
 });
 
 ///////////////////////////////////////////////////
+//toggle-agents
+///////////////////////////////////////////////////
+app.post("/api/agents/toggle-status", async (req, res) => {
+  try {
+    const { agentId, isActive } = req.body;
+
+    await prisma.agent.update({
+      where: { id: agentId },
+      data: { isActive },
+    });
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Status update failed" });
+  }
+});
+
+///////////////////////////////////////////////////
 // CREATE USER BEFORE PAYMENT
 ////////////////////////////////////////////////////
 app.post("/api/users/create", async (req, res) => {
