@@ -25,6 +25,25 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const PORT = process.env.PORT || 5000;
 
+
+const verifyAdmin = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.admin = decoded;
+    next();
+
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
 ////////////////////////////////////////////////////
 // ENV CHECK
 ////////////////////////////////////////////////////
@@ -515,6 +534,23 @@ app.post("/api/check-duplicate", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////
+// ADMIN GET USERS
+////////////////////////////////////////////////////
+app.get("/api/admin/users", verifyAdmin, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+
+////////////////////////////////////////////////////
 // ADMIN AUTH
 ///////////////////////////////////////////////////
 app.post("/api/admin/login", async (req, res) => {
@@ -556,23 +592,7 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-const verifyAdmin = (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
 
-    if (!token) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    req.admin = decoded;
-    next();
-
-  } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
-  }
-};
 
 app.get("/api/admin/agents", verifyAdmin, async (req, res) => {
   const agents = await prisma.agent.findMany({
@@ -580,6 +600,33 @@ app.get("/api/admin/agents", verifyAdmin, async (req, res) => {
   });
   res.json(agents);
 });
+
+////////////////////////////////////////////////////
+// DOWNLOAD USER RESUME
+////////////////////////////////////////////////////
+app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!user || !user.resume) {
+      return res.status(404).json({ error: "Resume not found" });
+    }
+
+    res.setHeader("Content-Type", user.resumeMimeType || "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`
+    );
+
+    res.send(user.resume);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Download failed" });
+  }
+});
+
 
 ////////////////////////////////////////////////////
 // START SERVER
