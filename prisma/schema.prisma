@@ -82,6 +82,7 @@ model User {
   hasPreviousExperience  Boolean
 
   education              Json?
+  previousExperience     Json?
 
   // 🔥 Store full PDF in DB
   resume                 Bytes?
