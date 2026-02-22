@@ -434,6 +434,57 @@ app.post("/api/agents/approve", async (req, res) => {
 });
 
 ////////////////////////////////////////////////////
+// CHECK DUPLICATE FIELD (SAFE VERSION)
+////////////////////////////////////////////////////
+app.post("/api/check-duplicate", async (req, res) => {
+  try {
+    const { type, field, value } = req.body;
+
+    if (!type || !field || !value) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
+
+    let exists = false;
+
+    // ✅ Allowed fields only
+    const allowedUserFields = ["email", "phone", "aadhaar"];
+    const allowedAgentFields = ["email", "phone", "aadhaarNumber"];
+
+    if (type === "user") {
+
+      if (!allowedUserFields.includes(field)) {
+        return res.status(400).json({ error: "Invalid field" });
+      }
+
+      const user = await prisma.user.findFirst({
+        where: { [field]: value },
+      });
+
+      exists = !!user;
+    }
+
+    if (type === "agent") {
+
+      if (!allowedAgentFields.includes(field)) {
+        return res.status(400).json({ error: "Invalid field" });
+      }
+
+      const agent = await prisma.agent.findFirst({
+        where: { [field]: value },
+      });
+
+      exists = !!agent;
+    }
+
+    return res.json({ exists });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Duplicate check failed" });
+  }
+});
+
+////////////////////////////////////////////////////
 // ADMIN AUTH
 ///////////////////////////////////////////////////
 app.post("/api/admin/login", async (req, res) => {
