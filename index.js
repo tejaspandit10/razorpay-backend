@@ -109,6 +109,7 @@ app.post("/api/users/create", async (req, res) => {
         expectedSalary: parseInt(data.expectedSalary),
         preferredLocation: data.preferredLocation,
         hasPreviousExperience: data.hasPreviousExperience === true,
+        education: data.education || [],
         paymentStatus: "PENDING",
 
         // 🔥 Resume fields (NEW)

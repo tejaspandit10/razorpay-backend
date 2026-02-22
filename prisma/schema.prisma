@@ -81,6 +81,8 @@ model User {
   preferredLocation      String
   hasPreviousExperience  Boolean
 
+  education              Json?
+
   // 🔥 Store full PDF in DB
   resume                 Bytes?
   resumeFileName         String?
