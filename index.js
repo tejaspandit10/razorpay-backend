@@ -125,6 +125,23 @@ app.post("/api/users/create", async (req, res) => {
       resumeMimeType = match ? match[1] : "application/pdf";
     }
 
+    const existingUser = await prisma.user.findFirst({
+  where: {
+    OR: [
+      { email: data.email },
+      { phone: data.phone },
+      { aadhaar: data.aadhaar },
+    ],
+  },
+});
+
+if (existingUser) {
+  return res.json({
+    message: "User already exists",
+    userId: existingUser.id,
+  });
+}
+
     //////////////////////////////////////////////////////
     // CREATE USER
     //////////////////////////////////////////////////////
