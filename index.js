@@ -164,7 +164,7 @@ if (existingUser) {
         englishProficiency: data.englishProficiency,
         expectedSalary: parseInt(data.expectedSalary),
         preferredLocation: data.preferredLocation,
-        hasPreviousExperience: data.hasPreviousExperience === true,
+        hasPreviousExperience: data.hasPreviousExperience,
 
 previousExperience:
   data.hasPreviousExperience === true
