@@ -16,6 +16,7 @@ import { v2 as cloudinary } from "cloudinary";
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(helmet());
 
 app.use(
