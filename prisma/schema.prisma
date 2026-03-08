@@ -89,6 +89,8 @@ model User {
   resumeFileName         String?
   resumeMimeType         String?
 
+  resumeUrl              String?
+
   paymentStatus          PaymentStatus @default(PENDING)
 
   createdAt              DateTime @default(now())

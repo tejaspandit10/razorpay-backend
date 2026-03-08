@@ -10,6 +10,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
 
 dotenv.config();
 
@@ -59,6 +61,15 @@ const verifyAdmin = (req, res, next) => {
     return res.status(401).json({ error: "Invalid token" });
   }
 };
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 ////////////////////////////////////////////////////
 // ENV CHECK
@@ -122,21 +133,15 @@ app.post("/api/users/create", async (req, res) => {
     // 🔥 HANDLE RESUME (BASE64 → BUFFER)
     //////////////////////////////////////////////////////
 
-    let resumeBuffer = null;
-    let resumeFileName = null;
-    let resumeMimeType = null;
+    let resumeUrl = null;
 
     if (data.resumeBase64) {
-      // Extract actual base64 content
-      const base64Data = data.resumeBase64.split(",")[1];
+    const uploadResult = await cloudinary.uploader.upload(data.resumeBase64, {
+    folder: "apcc-resumes",
+    resource_type: "raw"
+    });
 
-      resumeBuffer = Buffer.from(base64Data, "base64");
-
-      resumeFileName = data.resumeFileName || "resume.pdf";
-
-      // Extract mime type from header
-      const match = data.resumeBase64.match(/^data:(.+);base64,/);
-      resumeMimeType = match ? match[1] : "application/pdf";
+    resumeUrl = uploadResult.secure_url;
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -192,9 +197,7 @@ app.post("/api/users/create", async (req, res) => {
         paymentStatus: "PENDING",
 
         // 🔥 Resume fields (NEW)
-        resume: resumeBuffer,
-        resumeFileName,
-        resumeMimeType,
+        resumeUrl,
       },
     });
 
