@@ -572,13 +572,9 @@ app.get("/api/admin/users", verifyAdmin, async (req, res) => {
 ////////////////////////////////////////////////////
 // ADMIN AUTH
 ///////////////////////////////////////////////////
-const loginLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 5, // only 5 login attempts
-  message: { error: "Too many login attempts. Try again later." },
-});
 
-app.post("/api/admin/login", loginLimiter, async (req, res) => {
+
+app.post("/api/admin/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
