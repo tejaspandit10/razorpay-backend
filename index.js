@@ -625,11 +625,18 @@ app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
       where: { id: req.params.id },
     });
 
-    if (!user || !user.resumeUrl) {
+    if (!user || !user.resume) {
       return res.status(404).json({ error: "Resume not found" });
     }
 
-    return res.redirect(user.resumeUrl);
+    res.setHeader("Content-Type", user.resumeMimeType || "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`
+    );
+
+    res.send(user.resume);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Download failed" });
