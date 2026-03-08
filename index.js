@@ -8,15 +8,33 @@ import pkg from "@prisma/client";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
-//app.use(express.json());
+app.use(helmet());
+
+app.use(
+  cors({
+    origin: ["https://jobs-apcc.in", "https://www.jobs-apcc.in"],
+    methods: ["GET", "POST"],
+    credentials: true,
+  }),
+);
+
 app.use(express.json({ limit: "10mb" }));
+
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per IP
+  message: { error: "Too many requests, try again later." },
+});
+
+app.use(limiter);
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
@@ -24,7 +42,6 @@ const prisma = new PrismaClient();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const PORT = process.env.PORT || 5000;
-
 
 const verifyAdmin = (req, res, next) => {
   try {
@@ -38,7 +55,6 @@ const verifyAdmin = (req, res, next) => {
 
     req.admin = decoded;
     next();
-
   } catch (err) {
     return res.status(401).json({ error: "Invalid token" });
   }
@@ -65,7 +81,6 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-
 ////////////////////////////////////////////////////
 // HEALTH CHECK
 ////////////////////////////////////////////////////
@@ -86,7 +101,6 @@ app.post("/api/agents/toggle-status", async (req, res) => {
     });
 
     res.json({ success: true });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Status update failed" });
@@ -126,21 +140,21 @@ app.post("/api/users/create", async (req, res) => {
     }
 
     const existingUser = await prisma.user.findFirst({
-  where: {
-    OR: [
-      { email: data.email },
-      { phone: data.phone },
-      { aadhaar: data.aadhaar },
-    ],
-  },
-});
+      where: {
+        OR: [
+          { email: data.email },
+          { phone: data.phone },
+          { aadhaar: data.aadhaar },
+        ],
+      },
+    });
 
-if (existingUser) {
-  return res.json({
-    message: "User already exists",
-    userId: existingUser.id,
-  });
-}
+    if (existingUser) {
+      return res.json({
+        message: "User already exists",
+        userId: existingUser.id,
+      });
+    }
 
     //////////////////////////////////////////////////////
     // CREATE USER
@@ -166,14 +180,14 @@ if (existingUser) {
         preferredLocation: data.preferredLocation,
         hasPreviousExperience: data.hasPreviousExperience,
 
-previousExperience:
-  data.hasPreviousExperience === true
-    ? {
-        company: data.prevCompany || "",
-        designation: data.prevDesignation || "",
-        duration: data.prevDuration || "",
-      }
-    : null,
+        previousExperience:
+          data.hasPreviousExperience === true
+            ? {
+                company: data.prevCompany || "",
+                designation: data.prevDesignation || "",
+                duration: data.prevDuration || "",
+              }
+            : null,
         education: data.education || [],
         paymentStatus: "PENDING",
 
@@ -188,7 +202,6 @@ previousExperience:
       message: "User created successfully",
       userId: user.id,
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "User creation failed" });
@@ -213,7 +226,6 @@ app.post("/create-order", async (req, res) => {
     });
 
     res.json(order);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Order creation failed" });
@@ -259,7 +271,6 @@ app.post("/verify-payment", async (req, res) => {
     //////////////////////////////////////////////////////
 
     if (userId) {
-
       const user = await prisma.user.findUnique({
         where: { id: userId },
       });
@@ -328,69 +339,72 @@ app.post("/verify-payment", async (req, res) => {
     // 3️⃣ AGENT PAYMENT FLOW
     //////////////////////////////////////////////////////
 
-  if (agentTempData) {
+    if (agentTempData) {
+      // Extract initials
+      const nameParts = agentTempData.name.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts[nameParts.length - 1] || "";
 
-  // Extract initials
-  const nameParts = agentTempData.name.trim().split(" ");
-  const firstName = nameParts[0] || "";
-  const lastName = nameParts[nameParts.length - 1] || "";
+      const firstInitial = firstName.charAt(0).toUpperCase();
+      const lastInitial = lastName.charAt(0).toUpperCase();
 
-  const firstInitial = firstName.charAt(0).toUpperCase();
-  const lastInitial = lastName.charAt(0).toUpperCase();
+      // Get last agent
+      const lastAgent = await prisma.agent.findFirst({
+        orderBy: { createdAt: "desc" },
+      });
 
-  // Get last agent
-  const lastAgent = await prisma.agent.findFirst({
-    orderBy: { createdAt: "desc" },
-  });
+      let nextNumber = 1000;
 
-  let nextNumber = 1000;
+      if (lastAgent && lastAgent.agentCode) {
+        const lastDigits = lastAgent.agentCode.slice(2);
+        const parsed = parseInt(lastDigits);
+        if (!isNaN(parsed)) {
+          nextNumber = parsed + 1;
+        }
+      }
 
-  if (lastAgent && lastAgent.agentCode) {
-    const lastDigits = lastAgent.agentCode.slice(2);
-    const parsed = parseInt(lastDigits);
-    if (!isNaN(parsed)) {
-      nextNumber = parsed + 1;
-    }
-  }
+      if (!/^[0-9]{9,18}$/.test(agentTempData.accountNumber)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid Account Number" });
+      }
 
-  if (!/^[0-9]{9,18}$/.test(agentTempData.accountNumber)) {
-    return res.status(400).json({ success: false, error: "Invalid Account Number" });
-  }
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(agentTempData.ifscCode)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid IFSC Code" });
+      }
 
-  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(agentTempData.ifscCode)) {
-    return res.status(400).json({ success: false, error: "Invalid IFSC Code" });
-  }
+      const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
 
-  const agentCode = `${firstInitial}${lastInitial}${nextNumber}`;
+      const agent = await prisma.agent.create({
+        data: {
+          ...agentTempData,
+          agentCode,
+          isActive: false,
+        },
+      });
 
-  const agent = await prisma.agent.create({
-    data: {
-      ...agentTempData,
-      agentCode,
-      isActive: false,
-    },
-  });
+      await prisma.agentPayment.create({
+        data: {
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          amount: parseInt(amount),
+          gst: parseInt(gst),
+          status: "SUCCESS",
+          agentId: agent.id,
+        },
+      });
 
-  await prisma.agentPayment.create({
-    data: {
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      amount: parseInt(amount),
-      gst: parseInt(gst),
-      status: "SUCCESS",
-      agentId: agent.id,
-    },
-  });
+      //////////////////////////////////////////////////////
+      // 📧 SEND AGENT EMAIL
+      //////////////////////////////////////////////////////
 
-  //////////////////////////////////////////////////////
-  // 📧 SEND AGENT EMAIL
-  //////////////////////////////////////////////////////
-
-  await sgMail.send({
-    to: agent.email,
-    from: process.env.FROM_EMAIL,
-    subject: "Agent Registration Successful – APCC",
-    html: `
+      await sgMail.send({
+        to: agent.email,
+        from: process.env.FROM_EMAIL,
+        subject: "Agent Registration Successful – APCC",
+        html: `
       <h2>Registration Successful ✅</h2>
       <p>Dear ${agent.name},</p>
       <p>Your agent registration payment has been received.</p>
@@ -399,17 +413,17 @@ app.post("/verify-payment", async (req, res) => {
       <br/>
       <p>Regards,<br/>APCC Team</p>
     `,
-  });
+      });
 
-  //////////////////////////////////////////////////////
-  // 📧 SEND ADMIN EMAIL
-  //////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////
+      // 📧 SEND ADMIN EMAIL
+      //////////////////////////////////////////////////////
 
-  await sgMail.send({
-    to: process.env.ADMIN_EMAIL,
-    from: process.env.FROM_EMAIL,
-    subject: "🆕 New Agent Registration – APCC",
-    html: `
+      await sgMail.send({
+        to: process.env.ADMIN_EMAIL,
+        from: process.env.FROM_EMAIL,
+        subject: "🆕 New Agent Registration – APCC",
+        html: `
       <h2>New Agent Registered</h2>
       <p><strong>Name:</strong> ${agent.name}</p>
       <p><strong>Email:</strong> ${agent.email}</p>
@@ -418,14 +432,14 @@ app.post("/verify-payment", async (req, res) => {
       <p><strong>Amount Paid:</strong> ₹${amount} + GST</p>
       <p><strong>Transaction ID:</strong> ${razorpay_payment_id}</p>
     `,
-  });
+      });
 
-  // ✅ RETURN ONLY AFTER EMAILS ARE SENT
-  return res.json({
-    success: true,
-    agentCode,
-  });
-}
+      // ✅ RETURN ONLY AFTER EMAILS ARE SENT
+      return res.json({
+        success: true,
+        agentCode,
+      });
+    }
 
     //////////////////////////////////////////////////////
     // INVALID FLOW
@@ -435,7 +449,6 @@ app.post("/verify-payment", async (req, res) => {
       success: false,
       error: "Invalid payment flow",
     });
-
   } catch (error) {
     console.error("Verify error:", error);
     return res.status(500).json({
@@ -467,7 +480,6 @@ app.post("/api/agents/validate-code", async (req, res) => {
     }
 
     res.json({ valid: true, agentId: agent.id });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Validation failed" });
@@ -492,7 +504,6 @@ app.post("/api/agents/approve", async (req, res) => {
     res.json({
       message: "Agent approved successfully",
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Approval failed" });
@@ -517,7 +528,6 @@ app.post("/api/check-duplicate", async (req, res) => {
     const allowedAgentFields = ["email", "phone", "aadhaarNumber"];
 
     if (type === "user") {
-
       if (!allowedUserFields.includes(field)) {
         return res.status(400).json({ error: "Invalid field" });
       }
@@ -530,7 +540,6 @@ app.post("/api/check-duplicate", async (req, res) => {
     }
 
     if (type === "agent") {
-
       if (!allowedAgentFields.includes(field)) {
         return res.status(400).json({ error: "Invalid field" });
       }
@@ -543,7 +552,6 @@ app.post("/api/check-duplicate", async (req, res) => {
     }
 
     return res.json({ exists });
-
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Duplicate check failed" });
@@ -566,11 +574,16 @@ app.get("/api/admin/users", verifyAdmin, async (req, res) => {
   }
 });
 
-
 ////////////////////////////////////////////////////
 // ADMIN AUTH
 ///////////////////////////////////////////////////
-app.post("/api/admin/login", async (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5, // only 5 login attempts
+  message: { error: "Too many login attempts. Try again later." },
+});
+
+app.post("/api/admin/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -582,10 +595,7 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    const validPassword = await bcrypt.compare(
-      password,
-      admin.passwordHash
-    );
+    const validPassword = await bcrypt.compare(password, admin.passwordHash);
 
     if (!validPassword) {
       return res.status(400).json({ error: "Invalid credentials" });
@@ -594,7 +604,7 @@ app.post("/api/admin/login", async (req, res) => {
     const token = jwt.sign(
       { id: admin.id, role: admin.role },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     res.json({
@@ -602,14 +612,11 @@ app.post("/api/admin/login", async (req, res) => {
       token,
       role: admin.role,
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Login failed" });
   }
 });
-
-
 
 app.get("/api/admin/agents", verifyAdmin, async (req, res) => {
   const agents = await prisma.agent.findMany({
@@ -634,7 +641,7 @@ app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
     res.setHeader("Content-Type", user.resumeMimeType || "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`
+      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`,
     );
 
     res.send(user.resume);
@@ -643,7 +650,6 @@ app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
     res.status(500).json({ error: "Download failed" });
   }
 });
-
 
 ////////////////////////////////////////////////////
 // START SERVER
