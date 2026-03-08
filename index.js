@@ -10,13 +10,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { v2 as cloudinary } from "cloudinary";
+
 //import multer from "multer";
 
 dotenv.config();
 
 const app = express();
-app.set("trust proxy", 1);
+
 app.use(helmet());
 
 app.use(
@@ -65,12 +65,6 @@ const verifyAdmin = (req, res, next) => {
 
 //const storage = multer.memoryStorage();
 //const upload = multer({ storage });
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 ////////////////////////////////////////////////////
 // ENV CHECK
@@ -155,17 +149,19 @@ app.post("/api/users/create", async (req, res) => {
     // Upload Resume to Cloudinary
     ////////////////////////////////////////////////////
 
-    let resumeUrl = null;
+    let resumeBuffer = null;
+    let resumeFileName = null;
+    let resumeMimeType = null;
 
     if (data.resumeBase64) {
-      const uploadResult = await cloudinary.uploader.upload(data.resumeBase64, {
-        folder: "apcc-resumes",
-        public_id: `resume_${data.email}`,
-        overwrite: true,
-        resource_type: "raw",
-      });
+      const base64Data = data.resumeBase64.split(",")[1];
 
-      resumeUrl = uploadResult.secure_url;
+      resumeBuffer = Buffer.from(base64Data, "base64");
+
+      resumeFileName = data.resumeFileName || "resume.pdf";
+
+      const match = data.resumeBase64.match(/^data:(.+);base64,/);
+      resumeMimeType = match ? match[1] : "application/pdf";
     }
 
     //////////////////////////////////////////////////////
@@ -204,7 +200,9 @@ app.post("/api/users/create", async (req, res) => {
         paymentStatus: "PENDING",
 
         // 🔥 Resume fields (NEW)
-        resumeUrl,
+        resume: resumeBuffer,
+        resumeFileName,
+        resumeMimeType,
       },
     });
 

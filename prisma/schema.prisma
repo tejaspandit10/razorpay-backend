@@ -1,6 +1,5 @@
 generator client {
   provider      = "prisma-client-js"
-
 }
 
 datasource db {
@@ -89,8 +88,6 @@ model User {
   resume                 Bytes?
   resumeFileName         String?
   resumeMimeType         String?
-
-  resumeUrl              String?
 
   paymentStatus          PaymentStatus @default(PENDING)
 
