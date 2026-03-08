@@ -11,7 +11,7 @@ import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { v2 as cloudinary } from "cloudinary";
-import multer from "multer";
+//import multer from "multer";
 
 dotenv.config();
 
@@ -28,7 +28,7 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
-app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -62,8 +62,8 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+//const storage = multer.memoryStorage();
+//const upload = multer({ storage });
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -133,17 +133,6 @@ app.post("/api/users/create", async (req, res) => {
     // 🔥 HANDLE RESUME (BASE64 → BUFFER)
     //////////////////////////////////////////////////////
 
-    let resumeUrl = null;
-
-    if (data.resumeBase64) {
-    const uploadResult = await cloudinary.uploader.upload(data.resumeBase64, {
-    folder: "apcc-resumes",
-    resource_type: "raw"
-    });
-
-    resumeUrl = uploadResult.secure_url;
-    }
-
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -159,6 +148,23 @@ app.post("/api/users/create", async (req, res) => {
         message: "User already exists",
         userId: existingUser.id,
       });
+    }
+
+    ////////////////////////////////////////////////////
+    // Upload Resume to Cloudinary
+    ////////////////////////////////////////////////////
+
+    let resumeUrl = null;
+
+    if (data.resumeBase64) {
+      const uploadResult = await cloudinary.uploader.upload(data.resumeBase64, {
+        folder: "apcc-resumes",
+        public_id: `resume_${data.email}`,
+        overwrite: true,
+        resource_type: "raw",
+      });
+
+      resumeUrl = uploadResult.secure_url;
     }
 
     //////////////////////////////////////////////////////
@@ -637,17 +643,11 @@ app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
       where: { id: req.params.id },
     });
 
-    if (!user || !user.resume) {
+    if (!user || !user.resumeUrl) {
       return res.status(404).json({ error: "Resume not found" });
     }
 
-    res.setHeader("Content-Type", user.resumeMimeType || "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`,
-    );
-
-    res.send(user.resume);
+    return res.redirect(user.resumeUrl);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Download failed" });
