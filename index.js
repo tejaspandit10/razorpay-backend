@@ -573,7 +573,6 @@ app.get("/api/admin/users", verifyAdmin, async (req, res) => {
 // ADMIN AUTH
 ///////////////////////////////////////////////////
 
-
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -632,14 +631,52 @@ app.get("/api/admin/users/:id/resume", verifyAdmin, async (req, res) => {
     res.setHeader("Content-Type", user.resumeMimeType || "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`
+      `attachment; filename="${user.resumeFileName || "resume.pdf"}"`,
     );
 
     res.send(user.resume);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Download failed" });
+  }
+});
+
+////////////////////////////////////////////////////
+// RESUME PAYMENT
+////////////////////////////////////////////////////
+app.post("/api/users/resume-payment", async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+
+    if (!email && !phone) {
+      return res.status(400).json({ error: "Email or phone required" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { phone }],
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found. Please register.",
+      });
+    }
+
+    if (user.paymentStatus === "SUCCESS") {
+      return res.status(400).json({
+        error: "Payment already completed.",
+      });
+    }
+
+    res.json({
+      success: true,
+      userId: user.id,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
