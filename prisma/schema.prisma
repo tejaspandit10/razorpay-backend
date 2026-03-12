@@ -94,6 +94,9 @@ model User {
   createdAt              DateTime @default(now())
 
   payments               UserPayment[]
+  reminderCount          Int @default(0)
+  lastReminder           DateTime?
+  expiresAt              DateTime?
 
   @@map("users")
 }

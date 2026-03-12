@@ -8,6 +8,7 @@ import pkg from "@prisma/client";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import cron from "node-cron";
 //import multer from "multer";
 
 dotenv.config();
@@ -185,6 +186,7 @@ app.post("/api/users/create", async (req, res) => {
             : null,
         education: data.education || [],
         paymentStatus: "PENDING",
+        expiresAt: new Date(Date.now() + 30 * 1000), // 48 hours, 30 secs
 
         // 🔥 Resume fields (NEW)
         resume: resumeBuffer,
@@ -679,6 +681,119 @@ app.post("/api/users/resume-payment", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+////////////////////////////////////////////////////
+// PAYMENT REMINDER
+////////////////////////////////////////////////////
+cron.schedule("*/10 * * * * *", async () => {
+  try {
+
+    const users = await prisma.user.findMany({
+      where: {
+        paymentStatus: "PENDING"
+      }
+    });
+
+    const now = new Date();
+
+    for (const user of users) {
+
+      const hoursSinceRegistration =
+        (now - new Date(user.createdAt)) / (1000 * 60 * 60);
+
+      //////////////////////////////////////////////////
+      // Send reminder every 12 hours
+      //////////////////////////////////////////////////
+
+      if (
+        hoursSinceRegistration >= 12 &&
+        (!user.lastReminder ||
+          (now - user.lastReminder) / (1000 * 60 * 60) >= 12)
+      ) {
+
+        await sendReminder(user);
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            lastReminder: now,
+            reminderCount: user.reminderCount + 1
+          }
+        });
+      }
+
+      //////////////////////////////////////////////////
+      // Expire registration after 48 hours
+      //////////////////////////////////////////////////
+
+      if (now > user.expiresAt) {
+
+        await sendExpiryMessage(user);
+
+        await prisma.user.delete({
+          where: { id: user.id }
+        });
+
+      }
+
+    }
+
+  } catch (error) {
+    console.error("Reminder job error:", error);
+  }
+});
+
+async function sendReminder(user) {
+
+  await sgMail.send({
+    to: user.email,
+    from: process.env.FROM_EMAIL,
+    subject: "Complete Your APCC Registration",
+    html: `
+      <h2>Reminder: Complete Your Registration</h2>
+
+      <p>Dear ${user.firstName},</p>
+
+      <p>Your APCC registration is pending payment.</p>
+
+      <p>Please complete payment within <b>48 hours</b> or your registration will expire.</p>
+
+      <a href="https://jobs-apcc.in/resume-payment">
+      Complete Payment
+      </a>
+
+      <br><br>
+      APCC Team
+    `
+  });
+
+}
+
+async function sendExpiryMessage(user) {
+
+  await sgMail.send({
+    to: user.email,
+    from: process.env.FROM_EMAIL,
+    subject: "Registration Expired – APCC",
+    html: `
+      <h2>Registration Expired</h2>
+
+      <p>Dear ${user.firstName},</p>
+
+      <p>Your registration expired because payment was not completed within 48 hours.</p>
+
+      <p>Please register again to continue.</p>
+
+      <a href="https://jobs-apcc.in/apply">
+      Register Again
+      </a>
+
+      <br><br>
+      APCC Team
+    `
+  });
+
+}
 
 ////////////////////////////////////////////////////
 // START SERVER
