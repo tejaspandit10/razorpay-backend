@@ -186,7 +186,7 @@ app.post("/api/users/create", async (req, res) => {
             : null,
         education: data.education || [],
         paymentStatus: "PENDING",
-        expiresAt: new Date(Date.now() + 30 * 1000), // 48 hours, 30 secs
+        expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 48 hours
 
         // 🔥 Resume fields (NEW)
         resume: resumeBuffer,
@@ -685,7 +685,7 @@ app.post("/api/users/resume-payment", async (req, res) => {
 ////////////////////////////////////////////////////
 // PAYMENT REMINDER
 ////////////////////////////////////////////////////
-cron.schedule("*/10 * * * * *", async () => {
+cron.schedule("0 * * * *", async () => {
   try {
 
     const users = await prisma.user.findMany({
